@@ -70,18 +70,19 @@ if (isset($_POST['register_submit'])) {
     <style>
         :root {
             --nora-teal: #004d4d;
-            --nora-green: #10b981;
+            --nora-darkgreen: #003333;
+            --nora-light: #90f6d4;
             --nora-gradient: linear-gradient(135deg, #004d4d 0%, #059669 100%);
             --error: #dc2626;
-            --bg: #f0fdfa;
+            --bg: linear-gradient(135deg, #004d4d 0%, #059669 100%);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
 
         body {
-            background-color: var(--bg);
-            background-image: radial-gradient(at 0% 0%, hsla(161,71%,95%,1) 0, transparent 50%), 
-                              radial-gradient(at 50% 0%, hsla(180,100%,96%,1) 0, transparent 50%);
+            background-color: #004d4d;
+            /* background-image: radial-gradient(at 0% 0%, hsla(161,71%,95%,1) 0, transparent 50%), 
+                              radial-gradient(at 50% 0%, hsla(180,100%,96%,1) 0, transparent 50%); */
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -92,7 +93,7 @@ if (isset($_POST['register_submit'])) {
         .auth-card {
             width: 100%;
             max-width: 500px;
-            background: white;
+            background: #b2f3db;
             border-radius: 24px;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             overflow: hidden;
@@ -100,16 +101,16 @@ if (isset($_POST['register_submit'])) {
         }
 
         .auth-header {
-            background: var(--nora-gradient);
+            background: var(--nora-darkgreen);
             padding: 20px 10px;
             text-align: center;
             color: white;
         }
 
         .logo-img {
-            width: 120px; /* Adjust based on your actual logo size */
+            width: 150px; /* Adjust based on your actual logo size */
             height: auto;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
         }
 
@@ -174,7 +175,7 @@ if (isset($_POST['register_submit'])) {
         .btn-nora {
             width: 100%;
             padding: 14px;
-            background: var(--nora-gradient);
+            background: var(--nora-darkgreen);
             color: white;
             border: none;
             border-radius: 10px;

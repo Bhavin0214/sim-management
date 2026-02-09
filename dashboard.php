@@ -1683,6 +1683,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                             <thead>
                                 <tr>
                                     <th>Request ID</th>
+                                    <th>Employee</th>
+                                    <th>Requested By</th> <!-- Add this column -->
                                     <th>Type</th>
                                     <th>SIM Number</th>
                                     <th>Date</th>
@@ -1767,13 +1769,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                                 <tr>
                                     <th>Request ID</th>
                                     <th>Employee</th>
+                                    <th>Requested By</th> <!-- Add this column -->
                                     <th>Type</th>
                                     <th>SIM Number</th>
                                     <th>Date</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                     <?php if($user_role == 'admin'): ?>
-                                    <th>Admin Actions</th>
+                                    <th>Action By</th> <!-- Show who took action -->
                                     <?php endif; ?>
                                 </tr>
                             </thead>
@@ -1947,6 +1950,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
         }
         
         // Populate my requests table
+        // Populate my requests table
+        // Populate my requests table
         function populateMyRequests(requests) {
             const tbody = document.getElementById('myRequestsBody');
             tbody.innerHTML = '';
@@ -1954,12 +1959,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
             requests.forEach(req => {
                 const row = document.createElement('tr');
                 const reqId = req.REQ_ID || req.REQUEST_ID || req.ID || 'N/A';
+                const empName = req.EMP_NAME || req.FULL_NAME || 'You';
+                const reqByName = req.REQ_BY_NAME || 'You'; // Show who made the request
                 const simNo = req.SIM_NO || req.SIMM_NO || 'N/A';
                 const date = formatDate(req.req_at || req.REQ_AT);
                 const status = req.STATUS || 'pending';
                 
                 row.innerHTML = `
                     <td>${reqId}</td>
+                    <td>${empName}</td>
+                    <td>${reqByName}</td> <!-- Requested By column -->
                     <td>${req.request_type || 'Unknown'}</td>
                     <td>${simNo}</td>
                     <td>${date}</td>
@@ -1983,7 +1992,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                 $('#myRequestsTable').DataTable({
                     "pageLength": 10,
                     "lengthMenu": [[5, 10, 25, 50], [5, 10, 25, 50]],
-                    "order": [[3, "desc"]],
+                    "order": [[5, "desc"]], // Date column is now 5th (0-indexed)
                     "language": {
                         "emptyTable": "No requests found"
                     }
@@ -1992,6 +2001,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
         }
         
         // Populate employee requests table
+        // Populate employee requests table
+        // Populate employee requests table
         function populateEmpRequests(requests) {
             const tbody = document.getElementById('empRequestsBody');
             tbody.innerHTML = '';
@@ -1999,7 +2010,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
             requests.forEach(req => {
                 const row = document.createElement('tr');
                 const reqId = req.REQ_ID || req.REQUEST_ID || req.ID || 'N/A';
-                const empName = req.FULL_NAME || 'Unknown';
+                const empName = req.FULL_NAME || req.EMP_NAME || 'Unknown';
+                const reqByName = req.REQ_BY_NAME || 'Unknown';
+                const actByName = req.ACT_BY_NAME || '-';
                 const simNo = req.SIM_NO || req.SIMM_NO || 'N/A';
                 const date = formatDate(req.req_at || req.REQ_AT);
                 const status = req.STATUS || 'pending';
@@ -2018,13 +2031,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                         </div>
                     `;
                 } else {
-                    adminActions = '<span class="status status-' + status + '">' + status + '</span>';
+                    adminActions = actByName; // Show who took action
                 }
                 <?php endif; ?>
                 
                 row.innerHTML = `
                     <td>${reqId}</td>
                     <td>${empName}</td>
+                    <td>${reqByName}</td> <!-- Requested By -->
                     <td>${req.request_type || 'Unknown'}</td>
                     <td>${simNo}</td>
                     <td>${date}</td>
@@ -2051,7 +2065,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                 $('#empRequestsTable').DataTable({
                     "pageLength": 10,
                     "lengthMenu": [[5, 10, 25, 50], [5, 10, 25, 50]],
-                    "order": [[4, "desc"]],
+                    "order": [[5, "desc"]], // Date column is now 5th
                     "language": {
                         "emptyTable": "No requests found"
                     }
@@ -2078,27 +2092,129 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
         }
         
         // Show request details
+        // Show request details
         function showRequestDetails(request, table) {
             const modalBody = document.getElementById('requestDetails');
             let html = '';
             
-            // Create details HTML
+            // Create a mapping for better display names
+            const fieldLabels = {
+                'EMP_NAME': 'Employee Name',
+                'EMP_EMAIL': 'Employee Email',
+                'EMP_MOBILE': 'Employee Mobile',
+                'FULL_NAME': 'Employee Name',
+                'EMAIL_ID': 'Employee Email',
+                'MOBILE_NO': 'Employee Mobile',
+                'REQ_BY_NAME': 'Requested By',
+                'ACT_BY_NAME': 'Action By',
+                'REQ_AT': 'Request Date',
+                'ACT_AT': 'Action Date',
+                'STATUS': 'Status',
+                'SIM_NO': 'SIM Number',
+                'SIMM_NO': 'E-SIM Number',
+                'REMARKS': 'Remarks',
+                'REASON': 'Reason',
+                'REJECT_REASON': 'Rejection Reason',
+                'DURATION': 'Duration (Days)',
+                'POI_DOC_NO': 'POI Document No',
+                'POI_DOC_TYPE': 'POI Document Type',
+                'RENTAL_PLAN': 'Rental Plan',
+                'MOBILE_NO_AL': 'Alternative Mobile',
+                'CURRENT': 'Current Number',
+                'TO_SIM': 'New SIM Number'
+            };
+            
+            // Group fields by category for better organization
+            const employeeFields = ['EMP_NAME', 'FULL_NAME', 'EMAIL_ID', 'EMP_EMAIL', 'MOBILE_NO', 'EMP_MOBILE', 'DESGINATION', 'LOCATION'];
+            const requestFields = ['REQ_BY_NAME', 'ACT_BY_NAME', 'REQ_AT', 'ACT_AT', 'STATUS', 'REMARKS', 'REASON', 'REJECT_REASON'];
+            const simFields = ['SIM_NO', 'SIMM_NO', 'MOBILE_NO_AL', 'CURRENT', 'TO_SIM', 'DURATION', 'POI_DOC_NO', 'POI_DOC_TYPE', 'RENTAL_PLAN'];
+            
+            // Function to get display label
+            function getDisplayLabel(key) {
+                return fieldLabels[key] || key.replace(/_/g, ' ');
+            }
+            
+            // Skip unwanted fields
+            const skipFields = ['ID', 'EMP_ID', 'REQ_BY', 'ACT_BY', 'source_table', 'request_type', 'table_name', 'req_at', 'act_at', 'req_by', 'act_by'];
+            
+            // Employee Details Section
+            html += '<h4 style="color: var(--primary); margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid var(--primary);">Employee Details</h4>';
             for (const [key, value] of Object.entries(request)) {
-                if (value && key !== 'ID' && key !== 'table_name') {
-                    const label = key.replace(/_/g, ' ').toUpperCase();
+                if (value && employeeFields.includes(key) && !skipFields.includes(key)) {
                     html += `
                         <div class="detail-row">
-                            <div class="detail-label">${label}:</div>
+                            <div class="detail-label">${getDisplayLabel(key)}:</div>
                             <div class="detail-value">${value}</div>
                         </div>
                     `;
                 }
             }
             
+            // Request Details Section
+            html += '<h4 style="color: var(--primary); margin-top: 20px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid var(--primary);">Request Details</h4>';
+            for (const [key, value] of Object.entries(request)) {
+                if (value && requestFields.includes(key) && !skipFields.includes(key)) {
+                    html += `
+                        <div class="detail-row">
+                            <div class="detail-label">${getDisplayLabel(key)}:</div>
+                            <div class="detail-value">${value}</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // SIM Details Section
+            html += '<h4 style="color: var(--primary); margin-top: 20px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid var(--primary);">SIM Details</h4>';
+            for (const [key, value] of Object.entries(request)) {
+                if (value && simFields.includes(key) && !skipFields.includes(key)) {
+                    html += `
+                        <div class="detail-row">
+                            <div class="detail-label">${getDisplayLabel(key)}:</div>
+                            <div class="detail-value">${value}</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Other fields (catch-all)
+            let hasOtherFields = false;
+            let otherFieldsHtml = '';
+            for (const [key, value] of Object.entries(request)) {
+                if (value && !skipFields.includes(key) && 
+                    !employeeFields.includes(key) && 
+                    !requestFields.includes(key) && 
+                    !simFields.includes(key) &&
+                    key !== 'REQ_ID' && key !== 'REQUEST_ID' && key !== 'ID') {
+                    
+                    otherFieldsHtml += `
+                        <div class="detail-row">
+                            <div class="detail-label">${getDisplayLabel(key)}:</div>
+                            <div class="detail-value">${value}</div>
+                        </div>
+                    `;
+                    hasOtherFields = true;
+                }
+            }
+            
+            if (hasOtherFields) {
+                html += '<h4 style="color: var(--primary); margin-top: 20px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid var(--primary);">Other Details</h4>';
+                html += otherFieldsHtml;
+            }
+            
+            // Show request ID
+            const reqId = request.REQ_ID || request.REQUEST_ID || request.ID;
+            if (reqId) {
+                html = `
+                    <div class="detail-row" style="background: #f0f9ff; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
+                        <div class="detail-label" style="font-weight: bold; color: var(--primary);">Request ID:</div>
+                        <div class="detail-value" style="font-weight: bold; color: var(--primary);">${reqId}</div>
+                    </div>
+                ` + html;
+            }
+            
             modalBody.innerHTML = html;
             showModal('requestModal');
         }
-        
         // Check if employee ID is entered
         function checkEmployeeId() {
             const empId = document.getElementById('EMP_ID').value;

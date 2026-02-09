@@ -165,36 +165,6 @@ if (isset($_GET['ajax'])) {
 }
 
 // Function to get my requests
-function getMyRequests() {
-    global $conn, $user_id, $user_role, $role_permissions, $table_map, $request_names;
-    
-    $requests = [];
-    $my_tables = $role_permissions[$user_role]['my_requests'] ?? [];
-    
-    foreach ($my_tables as $table_key) {
-        $table = $table_map[$table_key];
-        
-        // Check if REQ_ID or REQUEST_ID exists
-        $id_field = 'REQ_ID';
-        if ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') {
-            $id_field = 'REQUEST_ID';
-        }
-        
-        $query = "SELECT *, '$table' as source_table FROM $table WHERE EMP_ID = $user_id ORDER BY req_at DESC LIMIT 100";
-        $result = mysqli_query($conn, $query);
-        
-        if ($result) {
-            while ($row = mysqli_fetch_assoc($result)) {
-                $row['request_type'] = $request_names[$table_key] ?? $table_key;
-                $requests[] = $row;
-            }
-        }
-    }
-    
-    return ['success' => true, 'requests' => $requests];
-}
-
-// Function to get employee requests
 function getEmpRequests() {
     global $conn, $user_role, $role_permissions, $table_map, $request_names;
     
@@ -211,9 +181,17 @@ function getEmpRequests() {
         foreach ($table_map as $key => $table) {
             $id_field = ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') ? 'REQUEST_ID' : 'REQ_ID';
             
-            $query = "SELECT r.*, e.FULL_NAME, e.EMAIL_ID, e.MOBILE_NO, '$table' as source_table 
+            $query = "SELECT r.*, 
+                             e.FULL_NAME, 
+                             e.EMAIL_ID, 
+                             e.MOBILE_NO, 
+                             req.FULL_NAME as REQ_BY_NAME,
+                             act.FULL_NAME as ACT_BY_NAME,
+                             '$table' as source_table 
                      FROM $table r 
                      LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+                     LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+                     LEFT JOIN master_employee act ON r.ACT_BY = act.ID 
                      ORDER BY r.req_at DESC LIMIT 100";
             $result = mysqli_query($conn, $query);
             
@@ -231,9 +209,17 @@ function getEmpRequests() {
             $table = $table_map[$table_key];
             $id_field = ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') ? 'REQUEST_ID' : 'REQ_ID';
             
-            $query = "SELECT r.*, e.FULL_NAME, e.EMAIL_ID, e.MOBILE_NO, '$table' as source_table 
+            $query = "SELECT r.*, 
+                             e.FULL_NAME, 
+                             e.EMAIL_ID, 
+                             e.MOBILE_NO, 
+                             req.FULL_NAME as REQ_BY_NAME,
+                             act.FULL_NAME as ACT_BY_NAME,
+                             '$table' as source_table 
                      FROM $table r 
                      LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+                     LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+                     LEFT JOIN master_employee act ON r.ACT_BY = act.ID 
                      ORDER BY r.req_at DESC LIMIT 100";
             $result = mysqli_query($conn, $query);
             
@@ -249,6 +235,46 @@ function getEmpRequests() {
     return ['success' => true, 'requests' => $requests];
 }
 
+// Function to get employee requests
+function getMyRequests() {
+    global $conn, $user_id, $user_role, $role_permissions, $table_map, $request_names;
+    
+    $requests = [];
+    $my_tables = $role_permissions[$user_role]['my_requests'] ?? [];
+    
+    foreach ($my_tables as $table_key) {
+        $table = $table_map[$table_key];
+        
+        // Check if REQ_ID or REQUEST_ID exists
+        $id_field = 'REQ_ID';
+        if ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') {
+            $id_field = 'REQUEST_ID';
+        }
+        
+        $query = "SELECT r.*, 
+                         e.FULL_NAME as EMP_NAME, 
+                         req.FULL_NAME as REQ_BY_NAME,
+                         '$table' as source_table 
+                  FROM $table r 
+                  LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+                  LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+                  WHERE r.EMP_ID = $user_id 
+                  ORDER BY r.req_at DESC LIMIT 100";
+        $result = mysqli_query($conn, $query);
+        
+        if ($result) {
+            while ($row = mysqli_fetch_assoc($result)) {
+                $row['request_type'] = $request_names[$table_key] ?? $table_key;
+                $requests[] = $row;
+            }
+        }
+    }
+    
+    return ['success' => true, 'requests' => $requests];
+}
+
+// View request details
+
 // View request details
 function viewRequest($table, $id) {
     global $conn;
@@ -263,7 +289,19 @@ function viewRequest($table, $id) {
         $id_field = 'REQUEST_ID';
     }
     
-    $query = "SELECT * FROM $table WHERE $id_field = '" . mysqli_real_escape_string($conn, $id) . "' LIMIT 1";
+    $query = "SELECT r.*, 
+                     e.FULL_NAME as EMP_NAME, 
+                     e.EMAIL_ID as EMP_EMAIL, 
+                     e.MOBILE_NO as EMP_MOBILE,
+                     req.FULL_NAME as REQ_BY_NAME,
+                     act.FULL_NAME as ACT_BY_NAME
+              FROM $table r 
+              LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+              LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+              LEFT JOIN master_employee act ON r.ACT_BY = act.ID 
+              WHERE r.$id_field = '" . mysqli_real_escape_string($conn, $id) . "' 
+              LIMIT 1";
+    
     $result = mysqli_query($conn, $query);
     
     if ($result && mysqli_num_rows($result) > 0) {

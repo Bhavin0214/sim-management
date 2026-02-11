@@ -2,35 +2,8 @@
 // backend.php - Complete Backend Processing
 session_start();
 
-// Database configuration
-$host = '127.0.0.1';
-$dbname = 'sim_managment';
-$username = 'root';
-$password = '';
-
-$conn = mysqli_connect($host, $username, $password, $dbname);
-if (!$conn) {
-    die("Connection failed: " . mysqli_connect_error());
-}
-mysqli_set_charset($conn, "utf8mb4");
-
-// Check if user is logged in
-function checkAuth() {
-    if (!isset($_SESSION['user_id'])) {
-        header("Location: index.php");
-        exit();
-    }
-}
-
-// Get user role
-function getUserRole() {
-    return $_SESSION['role'] ?? null;
-}
-
-// Get user ID
-function getUserId() {
-    return $_SESSION['user_id'] ?? null;
-}
+// Include config to get functions and connection
+require_once 'config.php';
 
 // Check authentication for AJAX calls
 if (!isset($_GET['ajax'])) {
@@ -164,7 +137,51 @@ if (isset($_GET['ajax'])) {
     exit;
 }
 
-// Function to get my requests
+// Function to get my requests - SHOW PENDING FIRST BY DEFAULT
+function getMyRequests() {
+    global $conn, $user_id, $user_role, $role_permissions, $table_map, $request_names;
+    
+    $requests = [];
+    $my_tables = $role_permissions[$user_role]['my_requests'] ?? [];
+    
+    foreach ($my_tables as $table_key) {
+        $table = $table_map[$table_key];
+        
+        // Check if REQ_ID or REQUEST_ID exists
+        $id_field = 'REQ_ID';
+        if ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') {
+            $id_field = 'REQUEST_ID';
+        }
+        
+        $query = "SELECT r.*, 
+                         e.FULL_NAME as EMP_NAME, 
+                         req.FULL_NAME as REQ_BY_NAME,
+                         '$table' as source_table 
+                  FROM $table r 
+                  LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+                  LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+                  WHERE r.EMP_ID = $user_id 
+                  ORDER BY 
+                    CASE WHEN r.STATUS = 'pending' THEN 1 
+                         WHEN r.STATUS = 'complete' THEN 2 
+                         ELSE 3 
+                    END,
+                    r.req_at DESC 
+                  LIMIT 100";
+        $result = mysqli_query($conn, $query);
+        
+        if ($result) {
+            while ($row = mysqli_fetch_assoc($result)) {
+                $row['request_type'] = $request_names[$table_key] ?? $table_key;
+                $requests[] = $row;
+            }
+        }
+    }
+    
+    return ['success' => true, 'requests' => $requests];
+}
+
+// Function to get employee requests - SHOW PENDING FIRST BY DEFAULT
 function getEmpRequests() {
     global $conn, $user_role, $role_permissions, $table_map, $request_names;
     
@@ -192,7 +209,13 @@ function getEmpRequests() {
                      LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
                      LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
                      LEFT JOIN master_employee act ON r.ACT_BY = act.ID 
-                     ORDER BY r.req_at DESC LIMIT 100";
+                     ORDER BY 
+                        CASE WHEN r.STATUS = 'pending' THEN 1 
+                             WHEN r.STATUS = 'complete' THEN 2 
+                             ELSE 3 
+                        END,
+                        r.req_at DESC 
+                     LIMIT 100";
             $result = mysqli_query($conn, $query);
             
             if ($result) {
@@ -220,7 +243,13 @@ function getEmpRequests() {
                      LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
                      LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
                      LEFT JOIN master_employee act ON r.ACT_BY = act.ID 
-                     ORDER BY r.req_at DESC LIMIT 100";
+                     ORDER BY 
+                        CASE WHEN r.STATUS = 'pending' THEN 1 
+                             WHEN r.STATUS = 'complete' THEN 2 
+                             ELSE 3 
+                        END,
+                        r.req_at DESC 
+                     LIMIT 100";
             $result = mysqli_query($conn, $query);
             
             if ($result) {
@@ -234,46 +263,6 @@ function getEmpRequests() {
     
     return ['success' => true, 'requests' => $requests];
 }
-
-// Function to get employee requests
-function getMyRequests() {
-    global $conn, $user_id, $user_role, $role_permissions, $table_map, $request_names;
-    
-    $requests = [];
-    $my_tables = $role_permissions[$user_role]['my_requests'] ?? [];
-    
-    foreach ($my_tables as $table_key) {
-        $table = $table_map[$table_key];
-        
-        // Check if REQ_ID or REQUEST_ID exists
-        $id_field = 'REQ_ID';
-        if ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') {
-            $id_field = 'REQUEST_ID';
-        }
-        
-        $query = "SELECT r.*, 
-                         e.FULL_NAME as EMP_NAME, 
-                         req.FULL_NAME as REQ_BY_NAME,
-                         '$table' as source_table 
-                  FROM $table r 
-                  LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
-                  LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
-                  WHERE r.EMP_ID = $user_id 
-                  ORDER BY r.req_at DESC LIMIT 100";
-        $result = mysqli_query($conn, $query);
-        
-        if ($result) {
-            while ($row = mysqli_fetch_assoc($result)) {
-                $row['request_type'] = $request_names[$table_key] ?? $table_key;
-                $requests[] = $row;
-            }
-        }
-    }
-    
-    return ['success' => true, 'requests' => $requests];
-}
-
-// View request details
 
 // View request details
 function viewRequest($table, $id) {
@@ -312,9 +301,9 @@ function viewRequest($table, $id) {
     return ['success' => false, 'message' => 'Request not found'];
 }
 
-// Search my requests
+// Search my requests - FIXED FILTERS
 function searchMyRequests() {
-    global $conn, $user_id, $user_role, $role_permissions, $table_map;
+    global $conn, $user_id, $user_role, $role_permissions, $table_map, $request_names;
     
     $status = $_GET['status'] ?? '';
     $type = $_GET['type'] ?? '';
@@ -323,26 +312,42 @@ function searchMyRequests() {
     $requests = [];
     $my_tables = $role_permissions[$user_role]['my_requests'] ?? [];
     
+    // Build WHERE conditions
+    $whereConditions = ["r.EMP_ID = $user_id"];
+    
+    if ($status && $status != 'all') {
+        $whereConditions[] = "r.STATUS = '" . mysqli_real_escape_string($conn, $status) . "'";
+    }
+    
+    if ($date && $date != 'all') {
+        $dateCondition = getDateCondition($date, 'r.');
+        if ($dateCondition) {
+            $whereConditions[] = substr($dateCondition, 5); // Remove " AND "
+        }
+    }
+    
     foreach ($my_tables as $table_key) {
         if ($type && $type != 'all' && $type != $table_key) continue;
         
         $table = $table_map[$table_key];
-        $query = "SELECT *, '$table' as source_table FROM $table WHERE EMP_ID = $user_id";
+        $whereClause = implode(' AND ', $whereConditions);
         
-        if ($status && $status != 'all') {
-            $query .= " AND STATUS = '$status'";
-        }
-        
-        if ($date && $date != 'all') {
-            $query .= getDateCondition($date);
-        }
-        
-        $query .= " ORDER BY req_at DESC";
+        $query = "SELECT r.*, e.FULL_NAME as EMP_NAME, req.FULL_NAME as REQ_BY_NAME, '$table' as source_table 
+                 FROM $table r 
+                 LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+                 LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+                 WHERE $whereClause
+                 ORDER BY 
+                    CASE WHEN r.STATUS = 'pending' THEN 1 
+                         WHEN r.STATUS = 'complete' THEN 2 
+                         ELSE 3 
+                    END,
+                    r.req_at DESC";
         
         $result = mysqli_query($conn, $query);
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
-                $row['request_type'] = getRequestTypeName($table);
+                $row['request_type'] = $request_names[$table_key] ?? $table_key;
                 $requests[] = $row;
             }
         }
@@ -351,9 +356,9 @@ function searchMyRequests() {
     return ['success' => true, 'requests' => $requests];
 }
 
-// Search employee requests
+// Search employee requests - FIXED FILTERS
 function searchEmpRequests() {
-    global $conn, $user_role, $role_permissions, $table_map;
+    global $conn, $user_role, $role_permissions, $table_map, $request_names;
     
     $emp_id = $_GET['emp_id'] ?? '';
     $status = $_GET['status'] ?? '';
@@ -368,6 +373,24 @@ function searchEmpRequests() {
     
     $emp_tables = $role_permissions[$user_role]['emp_request_types'];
     
+    // Build WHERE conditions
+    $whereConditions = ["1=1"];
+    
+    if ($emp_id && is_numeric($emp_id)) {
+        $whereConditions[] = "r.EMP_ID = " . intval($emp_id);
+    }
+    
+    if ($status && $status != 'all') {
+        $whereConditions[] = "r.STATUS = '" . mysqli_real_escape_string($conn, $status) . "'";
+    }
+    
+    if ($date && $date != 'all') {
+        $dateCondition = getDateCondition($date, 'r.');
+        if ($dateCondition) {
+            $whereConditions[] = substr($dateCondition, 5); // Remove " AND "
+        }
+    }
+    
     // Handle "all" for admin
     $tables_to_search = [];
     if (in_array('all', $emp_tables)) {
@@ -381,35 +404,31 @@ function searchEmpRequests() {
     }
     
     foreach ($tables_to_search as $table) {
+        // Check type filter
         if ($type && $type != 'all') {
             $table_key = array_search($table, $table_map);
             if ($table_key !== $type) continue;
         }
         
-        $query = "SELECT r.*, e.FULL_NAME, e.EMAIL_ID, e.MOBILE_NO, '$table' as source_table 
+        $whereClause = implode(' AND ', $whereConditions);
+        
+        $query = "SELECT r.*, e.FULL_NAME, e.EMAIL_ID, e.MOBILE_NO, req.FULL_NAME as REQ_BY_NAME, '$table' as source_table 
                  FROM $table r 
                  LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
-                 WHERE 1=1";
-        
-        if ($emp_id && is_numeric($emp_id)) {
-            $query .= " AND r.EMP_ID = " . intval($emp_id);
-        }
-        
-        if ($status && $status != 'all') {
-            $query .= " AND r.STATUS = '$status'";
-        }
-        
-        if ($date && $date != 'all') {
-            $query .= getDateCondition($date, 'r.');
-        }
-        
-        $query .= " ORDER BY r.req_at DESC";
+                 LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+                 WHERE $whereClause
+                 ORDER BY 
+                    CASE WHEN r.STATUS = 'pending' THEN 1 
+                         WHEN r.STATUS = 'complete' THEN 2 
+                         ELSE 3 
+                    END,
+                    r.req_at DESC";
         
         $result = mysqli_query($conn, $query);
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
                 $table_key = array_search($table, $table_map);
-                $row['request_type'] = getRequestTypeName($table);
+                $row['request_type'] = $request_names[$table_key] ?? $table_key;
                 $requests[] = $row;
             }
         }
@@ -457,21 +476,18 @@ function updateRequestStatus() {
     return ['success' => false, 'message' => mysqli_error($conn)];
 }
 
-// Get employee by ID - FIXED VERSION
+// Get employee by ID
 function getEmployeeById($emp_id = null) {
     global $conn;
     
-    // If no emp_id provided, try to get from GET
     if ($emp_id === null) {
         $emp_id = $_GET['id'] ?? 0;
     }
     
-    // Validate input
     if (!is_numeric($emp_id) || $emp_id <= 0) {
         return ['success' => false, 'message' => 'Invalid Employee ID'];
     }
     
-    // Sanitize input
     $emp_id = intval($emp_id);
     
     $query = "SELECT ID, FULL_NAME, EMAIL_ID, MOBILE_NO, DESGINATION, LOCATION, ROLE 
@@ -488,7 +504,6 @@ function getEmployeeById($emp_id = null) {
     if (mysqli_num_rows($result) > 0) {
         $employee = mysqli_fetch_assoc($result);
         
-        // Clean up any null values
         foreach ($employee as $key => $value) {
             if (is_null($value)) {
                 $employee[$key] = '';

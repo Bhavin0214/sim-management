@@ -257,10 +257,14 @@ if (isset($_POST['register_submit'])) {
                     <input type="text" name="designation" id="reg_desig" class="input-ctrl" placeholder="Designation" required>
                 </div>
                 <div class="form-group">
+                    // In index.php, update the role dropdown:
                     <select name="role" class="input-ctrl" required>
                         <option value="">Select Role</option>
                         <option value="Employee">Employee</option>
                         <option value="HR">HR</option>
+                        <option value="HOD">HOD</option>
+                        <option value="Head HR">Head HR</option>
+                        <option value="CEO">CEO</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>

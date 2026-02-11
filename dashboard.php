@@ -8,10 +8,19 @@ checkAuth();
 $user_id = getUserId();
 $user_role = getUserRole();
 
+// Redirect admin to admin dashboard if not filling a form
+if ($user_role == 'admin' && !isset($_GET['form'])) {
+    header("Location: admin_dashboard.php");
+    exit();
+}
+
 // Get user data
 $user_query = "SELECT * FROM master_employee WHERE ID = $user_id";
 $user_result = mysqli_query($conn, $user_query);
 $user_data = mysqli_fetch_assoc($user_result);
+
+
+
 
 // Define role permissions
 $role_permissions = [
@@ -48,6 +57,7 @@ $role_permissions = [
                                'air_for_personal_use', 'isd_activision']
     ]
 ];
+
 
 // Get rental plans for SIM Issuance form
 $rental_plans_query = "SELECT * FROM rental_plan ORDER BY level_id";
@@ -86,6 +96,7 @@ if ($active_form && isset($form_structures['request_types'][$active_form])) {
 }
 
 // Process form submission
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
     $request_type = $_POST['request_type'] ?? '';
     $mode = $_POST['mode'] ?? 'my_request';
@@ -93,25 +104,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
     if ($request_type && canAccessRequestType($user_role, $request_type, $mode)) {
         // Prepare data for backend
         $post_data = $_POST;
+        
+        // Handle file upload for POI
+        $poi_file_path = '';
+        if ($request_type == 'sim_issue' && isset($_FILES['POI']) && $_FILES['POI']['error'] == 0) {
+            $upload_dir = 'uploads/poi/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+            
+            $file_name = time() . '_' . basename($_FILES['POI']['name']);
+            $file_path = $upload_dir . $file_name;
+            
+            if (move_uploaded_file($_FILES['POI']['tmp_name'], $file_path)) {
+                $post_data['POI_FILE_PATH'] = $file_path;
+                $post_data['POI_ORIGINAL_NAME'] = $_FILES['POI']['name'];
+            }
+        }
+        
+        // Add ajax flag for backend
         $post_data['ajax'] = 1;
         $post_data['action'] = 'submit_request';
         
-        // Handle file upload for POI
-        if ($request_type == 'sim_issue' && isset($_FILES['POI']) && $_FILES['POI']['error'] == 0) {
-            $post_data['POI_uploaded'] = $_FILES['POI']['name'];
-            // In real system, you would save the file
-        }
+        // Include files
+        require_once 'backend.php';
         
-        // Submit to backend via cURL
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'backend.php');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        $response = curl_exec($ch);
-        curl_close($ch);
-        
-        $result = json_decode($response, true);
+        // Call submitRequest function directly
+        $result = submitRequest();
         
         if ($result['success']) {
             $_SESSION['success_message'] = "Request submitted successfully! Request ID: " . $result['request_id'];
@@ -1326,6 +1345,113 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
             .modal-body {
                 padding: 20px;
             }
+            /* Add responsive styles */
+        @media (max-width: 768px) {
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 -24px;
+                padding: 0 24px;
+            }
+            
+            table {
+                min-width: 800px;
+            }
+            
+            .request-card {
+                margin: 10px -24px;
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+            }
+            
+            .card-body {
+                padding: 0;
+            }
+            
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-container {
+                margin: 0 -24px;
+                border-radius: 0;
+            }
+            
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .search-actions, .form-actions {
+                flex-direction: column;
+            }
+            
+            .btn, .form-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .content {
+                padding: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            }
+            
+            .search-card {
+                padding: 20px;
+            }
+        }
+
+        /* Ensure tables are responsive */
+        .dataTables_wrapper {
+            overflow-x: auto;
+        }
+
+        /* Better table display on mobile */
+        @media (max-width: 768px) {
+            th, td {
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+            
+            .action-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+            
+            .status {
+                padding: 4px 8px;
+                font-size: 10px;
+            }
+        }
+
+        /* Fix modal on mobile */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                margin: 10px;
+            }
+            
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .detail-label {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+        }
         }
     </style>
 </head>
@@ -1372,7 +1498,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
         <aside class="sidebar" id="sidebar">
             <!-- My Requests -->
             <div class="sidebar-section">
-                <div class="sidebar-title">My Requests</div>
+                <div class="sidebar-title">My New Requests</div>
                 <?php foreach($permissions['my_requests'] as $request): ?>
                     <?php $title = $request_names[$request] ?? $request; ?>
                     <a href="dashboard.php?form=<?= $request ?>&mode=my_request" class="sidebar-link <?= ($active_form == $request && $active_mode == 'my_request') ? 'active' : '' ?>">
@@ -1387,7 +1513,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
             <!-- Employee Requests -->
             <?php if($has_emp_requests): ?>
             <div class="sidebar-section">
-                <div class="sidebar-title">Employee Requests</div>
+                <div class="sidebar-title">Employee New Requests</div>
                 <?php foreach($permissions['emp_request_types'] as $request): ?>
                     <?php if($request == 'all') continue; ?>
                     <?php $title = $request_names[$request] ?? $request; ?>
@@ -1883,6 +2009,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script>
+
+        // Handle form submission
+        document.getElementById('requestForm')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validate required fields
+            const requiredFields = this.querySelectorAll('[required]');
+            let isValid = true;
+            let firstError = null;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.style.borderColor = 'var(--danger)';
+                    isValid = false;
+                    if (!firstError) firstError = field;
+                }
+            });
+            
+            if (!isValid) {
+                showToast('Please fill all required fields', 'error');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+            
+            // Submit form
+            const formData = new FormData(this);
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            submitBtn.disabled = true;
+            
+            fetch('backend.php?ajax=1&action=submit_request', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Request submitted successfully! Request ID: ' + data.request_id, 'success');
+                    // Redirect to dashboard after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = 'dashboard.php';
+                    }, 2000);
+                } else {
+                    showToast('Error: ' + (data.message || 'Submission failed'), 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Network error. Please try again.', 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        });
         // Global variables
         let currentRequestId = null;
         let currentRequestTable = null;
@@ -2387,7 +2573,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                 
                 // Validate file type
                 const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
-                                  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                                'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
                 if (!validTypes.includes(file.type) && !file.name.match(/\.(jpg|jpeg|png|gif|pdf|doc|docx)$/i)) {
                     showToast('Invalid file type. Please upload image, PDF, or Word document', 'error');
                     input.value = '';
@@ -2397,23 +2583,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                 // Format file size
                 const fileSize = formatFileSize(file.size);
                 
-                // Show preview
+                // Create object URL for preview
+                const fileURL = URL.createObjectURL(file);
+                
+                // Determine file icon
+                let fileIcon = 'fa-file';
+                if (file.type.includes('image/')) {
+                    fileIcon = 'fa-file-image';
+                } else if (file.type.includes('pdf')) {
+                    fileIcon = 'fa-file-pdf';
+                } else if (file.type.includes('word') || file.type.includes('document')) {
+                    fileIcon = 'fa-file-word';
+                }
+                
+                // Show preview with view button
                 preview.innerHTML = `
                     <div class="preview-item">
                         <div class="preview-info">
-                            <i class="fas fa-file" style="color: var(--accent);"></i>
+                            <i class="fas ${fileIcon}" style="color: var(--accent); font-size: 24px;"></i>
                             <div>
                                 <div class="preview-name">${file.name}</div>
                                 <div class="preview-size">${fileSize}</div>
                             </div>
                         </div>
-                        <button type="button" class="delete-file" onclick="deleteFile()">
-                            <i class="fas fa-trash"></i> Remove
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="action-btn btn-view btn-small" onclick="viewUploadedFile('${fileURL}', '${file.name}', '${file.type}')">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            <button type="button" class="action-btn btn-reject btn-small" onclick="deleteFile()">
+                                <i class="fas fa-trash"></i> Remove
+                            </button>
+                        </div>
                     </div>
                 `;
                 preview.classList.add('show');
+                
+                // Store file reference for later use
+                preview.dataset.fileName = file.name;
+                preview.dataset.fileURL = fileURL;
             }
+        }
+
+        // View uploaded file
+        function viewUploadedFile(fileURL, fileName, fileType) {
+            // Create modal HTML
+            const modalHTML = `
+                <div class="modal show" id="fileViewModal">
+                    <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+                        <div class="modal-header">
+                            <div class="modal-title">View Document: ${fileName}</div>
+                            <button class="modal-close" onclick="closeModal('fileViewModal')">&times;</button>
+                        </div>
+                        <div class="modal-body" style="height: 70vh; padding: 0; overflow: auto;">
+                            ${fileType.includes('image/') ? 
+                                `<img src="${fileURL}" alt="${fileName}" style="width: 100%; height: auto; max-height: 65vh; object-fit: contain;">` :
+                                `<iframe src="${fileURL}" style="width: 100%; height: 100%; border: none; min-height: 65vh;"></iframe>`
+                            }
+                        </div>
+                        <div style="padding: 15px; text-align: center; border-top: 1px solid var(--border); display: flex; justify-content: center; gap: 10px;">
+                            <a href="${fileURL}" download="${fileName}" class="btn btn-primary">
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                            <button class="btn btn-secondary" onclick="closeModal('fileViewModal')">
+                                <i class="fas fa-times"></i> Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to body
+            const modalContainer = document.createElement('div');
+            modalContainer.innerHTML = modalHTML;
+            document.body.appendChild(modalContainer);
+            
+            // Show modal
+            document.getElementById('fileViewModal').classList.add('show');
+            
+            // Close modal when clicking outside
+            document.getElementById('fileViewModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal('fileViewModal');
+                }
+            });
         }
         
         // Delete uploaded file

@@ -6,10 +6,12 @@ require_once 'config.php';
 require_once 'backend.php'; // Include backend for request functions
 
 // Check if user is admin
+// Check if user is admin
 function checkAdminAuth() {
     checkAuth(); // First check if user is logged in
     
-    if ($_SESSION['role'] != 'admin') {
+    $allowed_roles = ['admin', 'HR', 'HOD', 'Head HR', 'CEO'];
+    if (!in_array($_SESSION['role'], $allowed_roles)) {
         header("Location: dashboard.php");
         exit();
     }
@@ -93,7 +95,7 @@ function getAdminStats() {
         $stats['total_users'] = $row['total_users'] ?? 0;
     }
     
-    // Get inventory stats from sim_inventory table (using your existing schema)
+    // Get inventory stats from sim_inventory table
     $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'sim_inventory'");
     if (mysqli_num_rows($table_check) > 0) {
         $query = "SELECT 
@@ -200,7 +202,7 @@ function getRequestStatsByType() {
     return $stats;
 }
 
-// Get all employee requests with search filters
+// Get all employee requests with search filters (shows pending first)
 function getAllEmployeeRequests($emp_id = '', $type = 'all', $status = 'all', $date_range = 'all') {
     global $conn;
     
@@ -338,7 +340,7 @@ function getAllEmployeeRequests($emp_id = '', $type = 'all', $status = 'all', $d
             $act_at_field = 'act_at';
         }
         
-        // Build query
+        // Build query - Order by STATUS to show pending first
         $query = "SELECT r.*, 
                          e.FULL_NAME, 
                          e.EMAIL_ID, 
@@ -354,7 +356,7 @@ function getAllEmployeeRequests($emp_id = '', $type = 'all', $status = 'all', $d
                   LEFT JOIN master_employee re ON r.$req_by_field = re.ID
                   LEFT JOIN master_employee ac ON r.$act_by_field = ac.ID
                   $where_clause
-                  ORDER BY r.$req_at_field DESC";
+                  ORDER BY FIELD(r.STATUS, 'pending', 'complete', 'reject'), r.$req_at_field DESC";
         
         $result = mysqli_query($conn, $query);
         
@@ -371,6 +373,40 @@ function getAllEmployeeRequests($emp_id = '', $type = 'all', $status = 'all', $d
 // Get pending requests only
 function getPendingRequests() {
     return getAllEmployeeRequests('', 'all', 'pending', 'all');
+}
+
+// Export requests to Excel
+function exportRequestsToExcel($emp_id = '', $type = 'all', $status = 'all', $date_range = 'all') {
+    global $conn;
+    
+    $requests = getAllEmployeeRequests($emp_id, $type, $status, $date_range);
+    
+    // Create CSV content
+    $csv = "Request ID,Employee Name,Employee ID,Request Type,SIM Number,Status,Request Date,Requested By\n";
+    
+    foreach ($requests as $req) {
+        $reqId = $req['REQ_ID'] ?? $req['REQUEST_ID'] ?? 'N/A';
+        $empName = $req['FULL_NAME'] ?? 'Unknown';
+        $empId = $req['EMP_ID'] ?? 'N/A';
+        $requestType = $req['request_type'] ?? 'Unknown';
+        $simNo = $req['SIM_NO'] ?? $req['SIMM_NO'] ?? 'N/A';
+        $statusText = $req['STATUS'] ?? 'pending';
+        $reqDate = $req['REQ_DATE'] ?? 'N/A';
+        $reqByName = $req['REQ_BY_NAME'] ?? 'Unknown';
+        
+        // Escape CSV values
+        $csv .= '"' . str_replace('"', '""', $reqId) . '",';
+        $csv .= '"' . str_replace('"', '""', $empName) . '",';
+        $csv .= '"' . str_replace('"', '""', $empId) . '",';
+        $csv .= '"' . str_replace('"', '""', $requestType) . '",';
+        $csv .= '"' . str_replace('"', '""', $simNo) . '",';
+        $csv .= '"' . str_replace('"', '""', $statusText) . '",';
+        $csv .= '"' . str_replace('"', '""', $reqDate) . '",';
+        $csv .= '"' . str_replace('"', '""', $reqByName) . '"';
+        $csv .= "\n";
+    }
+    
+    return $csv;
 }
 
 // Update user role
@@ -670,7 +706,7 @@ function getAvailableSims() {
     return $sims;
 }
 
-// Assign SIM to employee
+// Assign SIM to employee (for SIM Issuance requests)
 function assignSimToEmployee($sim_id, $employee_id, $request_id, $request_type) {
     global $conn;
     
@@ -687,7 +723,7 @@ function assignSimToEmployee($sim_id, $employee_id, $request_id, $request_type) 
     
     $sim_data = mysqli_fetch_assoc($sim_result);
     
-    // Update SIM status
+    // Update SIM status to ASSIGNED
     $update_query = "UPDATE sim_inventory SET 
                      Status = 'ASSIGNED',
                      emp_id = $employee_id
@@ -800,6 +836,20 @@ if (isset($_GET['ajax']) && isset($_GET['action'])) {
             $status = $_GET['status'] ?? 'all';
             $date_range = $_GET['date'] ?? 'all';
             echo json_encode(['success' => true, 'requests' => getAllEmployeeRequests($emp_id, $type, $status, $date_range)]);
+            break;
+            
+        case 'export_requests':
+            $emp_id = $_GET['emp_id'] ?? '';
+            $type = $_GET['type'] ?? 'all';
+            $status = $_GET['status'] ?? 'all';
+            $date_range = $_GET['date'] ?? 'all';
+            
+            $csv = exportRequestsToExcel($emp_id, $type, $status, $date_range);
+            
+            header('Content-Type: text/csv');
+            header('Content-Disposition: attachment; filename="requests_' . date('Y-m-d') . '.csv"');
+            echo $csv;
+            exit;
             break;
             
         case 'get_inventory':

@@ -77,7 +77,7 @@ if ($view == 'requests') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
     <style>
-        /* Use the same styles as dashboard.php but add admin-specific styles */
+        /* CSS styles remain exactly the same as before */
         :root {
             --primary: #004d4d;
             --primary-light: #006666;
@@ -1061,7 +1061,7 @@ if ($view == 'requests') {
             <div class="avatar"><?= strtoupper(substr($user_data['FULL_NAME'], 0, 2)) ?></div>
             <div class="user-info">
                 <div class="user-name"><?= htmlspecialchars($user_data['FULL_NAME']) ?></div>
-                <div class="user-role">ADMIN</div>
+                <div class="user-role"><?= strtoupper($_SESSION['role']) ?></div>
             </div>
             <i class="fas fa-chevron-down" style="font-size: 12px;"></i>
             
@@ -1119,19 +1119,21 @@ if ($view == 'requests') {
                 </a>
             </div>
             
-            <!-- My New Requests -->
+            <!-- My New Requests (Only for admin) -->
+            <?php if($_SESSION['role'] == 'admin'): ?>
             <div class="sidebar-section">
-                <div class="sidebar-title">New Request</div>
-                <a href="dashboard.php?form=sim_issue&mode=my_request" class="sidebar-link">
-                    <i class="fas fa-sim-card"></i> SIM Issuance
-                </a>
-                <a href="dashboard.php?form=activision_of_new_sim&mode=my_request" class="sidebar-link">
-                    <i class="fas fa-plus-circle"></i> New SIM Activation
-                </a>
+                <div class="sidebar-title">My New Request</div>
                 <a href="dashboard.php?form=activision_e_sim&mode=my_request" class="sidebar-link">
                     <i class="fas fa-sim-card"></i> E-SIM Activation
                 </a>
+                <a href="dashboard.php?form=sim_replacement&mode=my_request" class="sidebar-link">
+                    <i class="fas fa-exchange-alt"></i> SIM Replacement
+                </a>
+                <a href="dashboard.php?form=temporary_suspension&mode=my_request" class="sidebar-link">
+                    <i class="fas fa-pause-circle"></i> Temporary Suspension
+                </a>
             </div>
+            <?php endif; ?>
         </aside>
         
         <!-- Content -->
@@ -1274,12 +1276,14 @@ if ($view == 'requests') {
                                                 <button class="action-btn btn-view btn-small" onclick="viewRequest('<?= $sourceTable ?>', '<?= $reqId ?>')">
                                                     <i class="fas fa-eye"></i> View
                                                 </button>
+                                                <?php if(in_array($_SESSION['role'], ['admin', 'HR', 'HOD', 'Head HR', 'CEO'])): ?>
                                                 <button class="action-btn btn-approve btn-small" onclick="showActionModal('<?= $sourceTable ?>', '<?= $reqId ?>', '<?= $requestTypeKey ?>', <?= $empId ?>)">
                                                     <i class="fas fa-check"></i> Approve
                                                 </button>
                                                 <button class="action-btn btn-reject btn-small" onclick="showRejectModal('<?= $sourceTable ?>', '<?= $reqId ?>')">
                                                     <i class="fas fa-times"></i> Reject
                                                 </button>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
@@ -1304,7 +1308,11 @@ if ($view == 'requests') {
                         <h1 class="page-title">Request Management</h1>
                         <p class="page-subtitle">Manage all SIM requests</p>
                     </div>
-                    <div>
+                    <div style="display: flex; gap: 10px;">
+                        <!-- Export Button -->
+                        <button class="btn btn-primary" onclick="exportRequests()">
+                            <i class="fas fa-file-export"></i> Export to Excel
+                        </button>
                         <button class="btn btn-primary" onclick="loadRequests()">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
@@ -1389,6 +1397,9 @@ if ($view == 'requests') {
                         <div class="card-title">
                             <?= $active_section == 'pending' ? 'Pending Requests' : 
                                ($active_section == 'all_requests' ? 'All Employee Requests' : 'My Requests') ?>
+                            <span style="font-size: 12px; color: var(--text-light); margin-left: 10px;">
+                                (Showing <?= count($emp_requests) ?> requests)
+                            </span>
                         </div>
                         <div class="card-count"><?= count($emp_requests) ?></div>
                     </div>
@@ -1407,7 +1418,23 @@ if ($view == 'requests') {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach($emp_requests as $req): 
+                                    <?php 
+                                    // Group requests by status to show pending first
+                                    $pending_requests = [];
+                                    $other_requests = [];
+                                    
+                                    foreach($emp_requests as $req) {
+                                        if (($req['STATUS'] ?? '') == 'pending') {
+                                            $pending_requests[] = $req;
+                                        } else {
+                                            $other_requests[] = $req;
+                                        }
+                                    }
+                                    
+                                    // Merge arrays with pending first
+                                    $sorted_requests = array_merge($pending_requests, $other_requests);
+                                    
+                                    foreach($sorted_requests as $req): 
                                         $reqId = $req['REQ_ID'] ?? $req['REQUEST_ID'] ?? 'N/A';
                                         $empName = $req['FULL_NAME'] ?? $req['EMP_NAME'] ?? 'Unknown';
                                         $empId = $req['EMP_ID'] ?? 'N/A';
@@ -1443,7 +1470,7 @@ if ($view == 'requests') {
                                                 <button class="action-btn btn-view btn-small" onclick="viewRequest('<?= $sourceTable ?>', '<?= $reqId ?>')">
                                                     <i class="fas fa-eye"></i> View
                                                 </button>
-                                                <?php if($status == 'pending' && $active_section != 'my_requests'): ?>
+                                                <?php if($status == 'pending' && $active_section != 'my_requests' && in_array($_SESSION['role'], ['admin', 'HR', 'HOD', 'Head HR', 'CEO'])): ?>
                                                 <button class="action-btn btn-approve btn-small" onclick="showActionModal('<?= $sourceTable ?>', '<?= $reqId ?>', '<?= $requestTypeKey ?>', <?= $empId ?>)">
                                                     <i class="fas fa-check"></i> Approve
                                                 </button>
@@ -1455,7 +1482,7 @@ if ($view == 'requests') {
                                         </td>
                                     </tr>
                                     <?php endforeach; ?>
-                                    <?php if(empty($emp_requests)): ?>
+                                    <?php if(empty($sorted_requests)): ?>
                                     <tr>
                                         <td colspan="7" style="text-align: center; padding: 30px; color: var(--text-light);">
                                             No requests found
@@ -1573,7 +1600,7 @@ if ($view == 'requests') {
                                                 <button class="action-btn btn-view btn-small" onclick="viewInventoryItem(<?= $item['SIM_ID'] ?>)">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                <?php if($item['Status'] == 'AVAILABLE'): ?>
+                                                <?php if($item['Status'] == 'AVAILABLE' && $_SESSION['role'] == 'admin'): ?>
                                                 <button class="action-btn btn-assign btn-small" onclick="assignInventoryItem(<?= $item['SIM_ID'] ?>)">
                                                     <i class="fas fa-user-check"></i>
                                                 </button>
@@ -1672,13 +1699,15 @@ if ($view == 'requests') {
                                         <td><?= $user['REG_DATE'] ?></td>
                                         <td>
                                             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                                <?php if(in_array($_SESSION['role'], ['admin', 'HR', 'HOD', 'Head HR', 'CEO'])): ?>
                                                 <button class="action-btn btn-edit btn-small" onclick="editUserRole(<?= $user['ID'] ?>, '<?= $user['ROLE'] ?>', '<?= htmlspecialchars($user['FULL_NAME']) ?>')">
                                                     <i class="fas fa-edit"></i> Role
                                                 </button>
-                                                <?php if($user['ID'] != $user_id && $user['ROLE'] != 'admin'): ?>
+                                                <?php if($user['ID'] != $user_id && $user['ROLE'] != 'admin' && $_SESSION['role'] == 'admin'): ?>
                                                 <button class="action-btn btn-delete btn-small" onclick="deleteUserConfirm(<?= $user['ID'] ?>, '<?= htmlspecialchars($user['FULL_NAME']) ?>')">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
+                                                <?php endif; ?>
                                                 <?php endif; ?>
                                             </div>
                                         </td>
@@ -2021,6 +2050,32 @@ SIM_NUMBER,Mobile_Number,Service_Provider,Location,Status,emp_id
             window.location.href = 'admin_dashboard.php?view=requests&section=<?= $active_section ?>';
         }
         
+        // Export requests to Excel
+        function exportRequests() {
+            const empId = document.getElementById('searchEmpId').value;
+            const type = document.getElementById('searchReqType').value;
+            const status = document.getElementById('searchStatus').value;
+            const date = document.getElementById('searchDate').value;
+            
+            const params = new URLSearchParams();
+            params.append('ajax', '1');
+            params.append('action', 'export_requests');
+            if (empId) params.append('emp_id', empId);
+            params.append('type', type);
+            params.append('status', status);
+            params.append('date', date);
+            
+            // Create a temporary link to trigger download
+            const link = document.createElement('a');
+            link.href = `admin_functions.php?${params.toString()}`;
+            link.download = `requests_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Export started. File will download shortly.', 'success');
+        }
+        
         // View request details
         function viewRequest(table, id) {
             fetch(`backend.php?ajax=1&action=view_request&table=${table}&id=${id}`)
@@ -2139,9 +2194,9 @@ SIM_NUMBER,Mobile_Number,Service_Provider,Location,Status,emp_id
             document.getElementById('actionStatus').value = 'complete';
             document.getElementById('actionReason').value = '';
             
-            // Check if this is a SIM assignment request
+            // Check if this is a SIM assignment request (only for admin)
             const simAssignmentTypes = ['sim_issue', 'activision_of_new_sim', 'activision_e_sim', 'sim_replacement'];
-            if (simAssignmentTypes.includes(requestType)) {
+            if (simAssignmentTypes.includes(requestType) && '<?= $_SESSION['role'] ?>' === 'admin') {
                 // Show SIM assignment section
                 document.getElementById('assignSimSection').style.display = 'block';
                 loadAvailableSims();
@@ -2175,10 +2230,10 @@ SIM_NUMBER,Mobile_Number,Service_Provider,Location,Status,emp_id
                 assignSimSection.style.display = 'none';
             } else {
                 reasonField.style.display = 'none';
-                // Show assign SIM section only for SIM assignment requests
+                // Show assign SIM section only for SIM assignment requests and admin role
                 const requestType = document.getElementById('actionReqType').value;
                 const simAssignmentTypes = ['sim_issue', 'activision_of_new_sim', 'activision_e_sim', 'sim_replacement'];
-                if (simAssignmentTypes.includes(requestType)) {
+                if (simAssignmentTypes.includes(requestType) && '<?= $_SESSION['role'] ?>' === 'admin') {
                     assignSimSection.style.display = 'block';
                 }
             }
@@ -2220,8 +2275,8 @@ SIM_NUMBER,Mobile_Number,Service_Provider,Location,Status,emp_id
             const empId = document.getElementById('actionEmpId').value;
             const simId = document.getElementById('availableSims').value;
             
-            if (status === 'complete' && requestType && ['sim_issue', 'activision_of_new_sim', 'activision_e_sim', 'sim_replacement'].includes(requestType)) {
-                // SIM assignment required
+            if (status === 'complete' && requestType && ['sim_issue', 'activision_of_new_sim', 'activision_e_sim', 'sim_replacement'].includes(requestType) && '<?= $_SESSION['role'] ?>' === 'admin') {
+                // SIM assignment required (only for admin)
                 if (!simId) {
                     showToast('Please select a SIM to assign', 'error');
                     return;

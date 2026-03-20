@@ -2,7 +2,7 @@
 // admin_dashboard.php - Complete Admin Panel
 
 // Start session first
-session_start();
+
 
 // Include required files
 require_once 'config.php';
@@ -145,8 +145,8 @@ if ($view == 'requests') {
         }
         
         .logo-img {
-            width: 40px;
-            height: 40px;
+            width: 100px;
+            height: 100px;
             object-fit: contain;
         }
         
@@ -1021,7 +1021,44 @@ if ($view == 'requests') {
             border-radius: 6px;
             transition: 0.2s;
         }
-        
+        /* Improved responsiveness */
+@media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+            .search-actions {
+                flex-direction: column;
+            }
+            .btn, .form-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            table {
+                min-width: 800px;
+            }
+            .sidebar {
+                width: 240px;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            .content {
+                margin-left: 0;
+            }
+            .modal-content {
+                width: 95%;
+                margin: 10px;
+            }
+        }
         .mobile-toggle:hover {
             background: rgba(255,255,255,0.1);
         }
@@ -1277,7 +1314,7 @@ if ($view == 'requests') {
                                                     <i class="fas fa-eye"></i> View
                                                 </button>
                                                 <?php if(in_array($_SESSION['role'], ['admin', 'HR', 'HOD', 'Head HR', 'CEO'])): ?>
-                                                <button class="action-btn btn-approve btn-small" onclick="showActionModal('<?= $sourceTable ?>', '<?= $reqId ?>', '<?= $requestTypeKey ?>', <?= $empId ?>)">
+                                                <button class="action-btn btn-approve btn-small" onclick="showActionModal('<?= $sourceTable ?>', '<?= $reqId ?>', '<?= $sourceTable ?>', <?= $empId ?>)">
                                                     <i class="fas fa-check"></i> Approve
                                                 </button>
                                                 <button class="action-btn btn-reject btn-small" onclick="showRejectModal('<?= $sourceTable ?>', '<?= $reqId ?>')">
@@ -1567,7 +1604,7 @@ if ($view == 'requests') {
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="inventoryTableBody">
                                     <?php foreach($inventory as $item): ?>
                                     <tr>
                                         <td><?= $item['SIM_ID'] ?></td>
@@ -1971,7 +2008,52 @@ SIM_NUMBER,Mobile_Number,Service_Provider,Location,Status,emp_id
                 });
             <?php endif; ?>
         });
-        
+        // Load inventory
+       function loadInventory() {
+            const search = document.getElementById('inventorySearch').value;
+            const status = document.getElementById('inventoryStatus').value;
+            let url = 'admin_functions.php?ajax=1&action=get_inventory';
+            if (search) url += '&search=' + encodeURIComponent(search);
+            if (status) url += '&status=' + encodeURIComponent(status);
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) populateInventoryTable(data.inventory);
+                });
+        }
+
+        function populateInventoryTable(inventory) {
+            const tbody = document.getElementById('inventoryTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            inventory.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.SIM_ID || ''}</td>
+                    <td>${item.SIM_NUMBER || 'N/A'}</td>
+                    <td>${item.Mobile_Number || 'N/A'}</td>
+                    <td>${item.Service_Provider || 'N/A'}</td>
+                    <td>${item.Location || 'N/A'}</td>
+                    <td><span class="status status-${(item.Status || '').toLowerCase()}">${item.Status || 'N/A'}</span></td>
+                    <td>${item.assigned_name ? item.assigned_name + ' (' + item.assigned_designation + ')' : 'Not assigned'}</td>
+                    <td>
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <button class="action-btn btn-view btn-small" onclick="viewInventoryItem(${item.SIM_ID})"><i class="fas fa-eye"></i></button>
+                            ${item.Status === 'AVAILABLE' ? `<button class="action-btn btn-assign btn-small" onclick="assignInventoryItem(${item.SIM_ID})"><i class="fas fa-user-check"></i></button>` : ''}
+                            <button class="action-btn btn-edit btn-small" onclick="editInventoryItem(${item.SIM_ID})"><i class="fas fa-edit"></i></button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            document.getElementById('inventoryCount').textContent = inventory.length;
+            if ($.fn.DataTable.isDataTable('#inventoryTable')) {
+                $('#inventoryTable').DataTable().destroy();
+            }
+            if (inventory.length) {
+                $('#inventoryTable').DataTable({ pageLength: 10 });
+            }
+        }
         // Toggle sidebar
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('show');

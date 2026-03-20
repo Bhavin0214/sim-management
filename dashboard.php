@@ -97,50 +97,7 @@ if ($active_form && isset($form_structures['request_types'][$active_form])) {
 
 // Process form submission
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
-    $request_type = $_POST['request_type'] ?? '';
-    $mode = $_POST['mode'] ?? 'my_request';
-    
-    if ($request_type && canAccessRequestType($user_role, $request_type, $mode)) {
-        // Prepare data for backend
-        $post_data = $_POST;
-        
-        // Handle file upload for POI
-        $poi_file_path = '';
-        if ($request_type == 'sim_issue' && isset($_FILES['POI']) && $_FILES['POI']['error'] == 0) {
-            $upload_dir = 'uploads/poi/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-            
-            $file_name = time() . '_' . basename($_FILES['POI']['name']);
-            $file_path = $upload_dir . $file_name;
-            
-            if (move_uploaded_file($_FILES['POI']['tmp_name'], $file_path)) {
-                $post_data['POI_FILE_PATH'] = $file_path;
-                $post_data['POI_ORIGINAL_NAME'] = $_FILES['POI']['name'];
-            }
-        }
-        
-        // Add ajax flag for backend
-        $post_data['ajax'] = 1;
-        $post_data['action'] = 'submit_request';
-        
-        // Include files
-        require_once 'backend.php';
-        
-        // Call submitRequest function directly
-        $result = submitRequest();
-        
-        if ($result['success']) {
-            $_SESSION['success_message'] = "Request submitted successfully! Request ID: " . $result['request_id'];
-            header("Location: dashboard.php");
-            exit();
-        } else {
-            $_SESSION['error_message'] = "Error: " . ($result['message'] ?? "Submission failed");
-        }
-    }
-}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1434,7 +1391,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                 font-size: 10px;
             }
         }
-
+        /* Improved responsiveness */
+@media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+            .search-actions {
+                flex-direction: column;
+            }
+            .btn, .form-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            table {
+                min-width: 800px;
+            }
+            .sidebar {
+                width: 240px;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            .content {
+                margin-left: 0;
+            }
+            .modal-content {
+                width: 95%;
+                margin: 10px;
+            }
+        }
         /* Fix modal on mobile */
         @media (max-width: 768px) {
             .modal-content {

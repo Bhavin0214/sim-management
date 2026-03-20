@@ -148,26 +148,24 @@ function getMyRequests() {
         $table = $table_map[$table_key];
         
         // Check if REQ_ID or REQUEST_ID exists
-        $id_field = 'REQ_ID';
-        if ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') {
-            $id_field = 'REQUEST_ID';
-        }
-        
-        $query = "SELECT r.*, 
-                         e.FULL_NAME as EMP_NAME, 
-                         req.FULL_NAME as REQ_BY_NAME,
-                         '$table' as source_table 
-                  FROM $table r 
-                  LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
-                  LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
-                  WHERE r.EMP_ID = $user_id 
-                  ORDER BY 
-                    CASE WHEN r.STATUS = 'pending' THEN 1 
-                         WHEN r.STATUS = 'complete' THEN 2 
-                         ELSE 3 
-                    END,
-                    r.req_at DESC 
-                  LIMIT 100";
+        // Determine date field based on table
+    $date_field = (in_array($table, ['activision_e_sim', 'deactivision_of_sim', 'porting_cocp', 'air_for_personal_use', 'air_offical_usage', 'isd_activision', 'sim_replacement', 'temporary_suspension'])) ? 'REQ_AT' : 'req_at';
+
+    $query = "SELECT r.*, 
+                    e.FULL_NAME as EMP_NAME, 
+                    req.FULL_NAME as REQ_BY_NAME,
+                    '$table' as source_table 
+            FROM $table r 
+            LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+            LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+            WHERE r.EMP_ID = $user_id 
+            ORDER BY 
+                CASE WHEN r.STATUS = 'pending' THEN 1 
+                    WHEN r.STATUS = 'complete' THEN 2 
+                    ELSE 3 
+                END,
+                r.$date_field DESC 
+            LIMIT 100";
         $result = mysqli_query($conn, $query);
         
         if ($result) {
@@ -196,26 +194,24 @@ function getEmpRequests() {
     if (in_array('all', $emp_tables)) {
         // Admin sees all tables
         foreach ($table_map as $key => $table) {
-            $id_field = ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') ? 'REQUEST_ID' : 'REQ_ID';
-            
-            $query = "SELECT r.*, 
-                             e.FULL_NAME, 
-                             e.EMAIL_ID, 
-                             e.MOBILE_NO, 
-                             req.FULL_NAME as REQ_BY_NAME,
-                             act.FULL_NAME as ACT_BY_NAME,
-                             '$table' as source_table 
-                     FROM $table r 
-                     LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
-                     LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
-                     LEFT JOIN master_employee act ON r.ACT_BY = act.ID 
-                     ORDER BY 
-                        CASE WHEN r.STATUS = 'pending' THEN 1 
-                             WHEN r.STATUS = 'complete' THEN 2 
-                             ELSE 3 
-                        END,
-                        r.req_at DESC 
-                     LIMIT 100";
+            // Determine date field based on table
+    $date_field = (in_array($table, ['activision_e_sim', 'deactivision_of_sim', 'porting_cocp', 'air_for_personal_use', 'air_offical_usage', 'isd_activision', 'sim_replacement', 'temporary_suspension'])) ? 'REQ_AT' : 'req_at';
+
+    $query = "SELECT r.*, 
+                    e.FULL_NAME as EMP_NAME, 
+                    req.FULL_NAME as REQ_BY_NAME,
+                    '$table' as source_table 
+            FROM $table r 
+            LEFT JOIN master_employee e ON r.EMP_ID = e.ID 
+            LEFT JOIN master_employee req ON r.REQ_BY = req.ID 
+            WHERE r.EMP_ID = $user_id 
+            ORDER BY 
+                CASE WHEN r.STATUS = 'pending' THEN 1 
+                    WHEN r.STATUS = 'complete' THEN 2 
+                    ELSE 3 
+                END,
+                r.$date_field DESC 
+            LIMIT 100";
             $result = mysqli_query($conn, $query);
             
             if ($result) {
@@ -439,43 +435,47 @@ function searchEmpRequests() {
 
 // Update request status (admin only)
 function updateRequestStatus() {
-    global $conn, $user_role;
-    
+    global $conn, $user_id, $user_role;
+
     if ($user_role != 'admin') {
         return ['success' => false, 'message' => 'Unauthorized'];
     }
-    
+
     $table = $_POST['table'] ?? '';
     $id = $_POST['id'] ?? '';
     $status = $_POST['status'] ?? '';
     $reason = $_POST['reason'] ?? '';
-    
+
     if (!$table || !$id || !$status) {
         return ['success' => false, 'message' => 'Missing parameters'];
     }
-    
+
     // Determine ID field based on table
-    $id_field = 'REQ_ID';
-    if ($table == 'activision_of_new_sim' || $table == 'deactivision_of_sim') {
-        $id_field = 'REQUEST_ID';
-    }
-    
-    // Update based on table structure
-    $query = "UPDATE $table SET STATUS = '$status'";
-    
+    $id_field = (in_array($table, ['activision_of_new_sim', 'deactivision_of_sim'])) ? 'REQUEST_ID' : 'REQ_ID';
+
+    // Determine date and action fields
+    $act_by_field = (in_array($table, ['sim_issue', 'activision_of_new_sim'])) ? 'act_by' : 'ACT_BY';
+    $act_at_field = (in_array($table, ['sim_issue', 'activision_of_new_sim'])) ? 'act_at' : 'ACT_AT';
+
+    $query = "UPDATE $table SET 
+                STATUS = '$status',
+                $act_by_field = $user_id,
+                $act_at_field = NOW()";
+
     if ($status == 'reject' && $reason) {
         $query .= ", REJECT_REASON = '" . mysqli_real_escape_string($conn, $reason) . "'";
     }
-    
+
     $query .= " WHERE $id_field = '" . mysqli_real_escape_string($conn, $id) . "'";
-    
+
     if (mysqli_query($conn, $query)) {
         return ['success' => true];
     }
-    
+
     return ['success' => false, 'message' => mysqli_error($conn)];
 }
 
+// Get employee by ID
 // Get employee by ID
 function getEmployeeById($emp_id = null) {
     global $conn;
@@ -504,6 +504,7 @@ function getEmployeeById($emp_id = null) {
     if (mysqli_num_rows($result) > 0) {
         $employee = mysqli_fetch_assoc($result);
         
+        // Convert NULLs to empty strings
         foreach ($employee as $key => $value) {
             if (is_null($value)) {
                 $employee[$key] = '';
@@ -519,63 +520,76 @@ function getEmployeeById($emp_id = null) {
 // Submit request form
 function submitRequest() {
     global $conn, $user_id, $user_role;
-    
+
     $request_type = $_POST['request_type'] ?? '';
     $mode = $_POST['mode'] ?? 'my_request';
     $emp_id = $_POST['EMP_ID'] ?? $user_id;
-    
+
     // Validate request type
     $valid_types = ['sim_issue', 'activision_of_new_sim', 'deactivision_of_sim', 'porting_cocp', 
                     'activision_e_sim', 'sim_replacement', 'temporary_suspension', 
                     'air_offical_usage', 'air_for_personal_use', 'isd_activision'];
-    
+
     if (!in_array($request_type, $valid_types)) {
         return ['success' => false, 'message' => 'Invalid request type'];
     }
-    
+
     // Check if user can submit this request type
     if (!canAccessRequestType($user_role, $request_type, $mode)) {
         return ['success' => false, 'message' => 'You do not have permission to submit this request type'];
     }
-    
-    // Get table name
-    $table_name = '';
-    switch($request_type) {
-        case 'sim_issue': $table_name = 'sim_issue'; break;
-        case 'activision_of_new_sim': $table_name = 'activision_of_new_sim'; break;
-        case 'deactivision_of_sim': $table_name = 'deactivision_of_sim'; break;
-        case 'porting_cocp': $table_name = 'porting_cocp'; break;
-        case 'activision_e_sim': $table_name = 'activision_e_sim'; break;
-        case 'sim_replacement': $table_name = 'sim_replacement'; break;
-        case 'temporary_suspension': $table_name = 'temporary_suspension'; break;
-        case 'air_offical_usage': $table_name = 'air_offical_usage'; break;
-        case 'air_for_personal_use': $table_name = 'air_for_personal_use'; break;
-        case 'isd_activision': $table_name = 'isd_activision'; break;
-    }
-    
+
+    // Table mapping
+    $table_map = [
+        'sim_issue' => 'sim_issue',
+        'activision_of_new_sim' => 'activision_of_new_sim',
+        'deactivision_of_sim' => 'deactivision_of_sim',
+        'porting_cocp' => 'porting_cocp',
+        'activision_e_sim' => 'activision_e_sim',
+        'sim_replacement' => 'sim_replacement',
+        'temporary_suspension' => 'temporary_suspension',
+        'air_offical_usage' => 'air_offical_usage',
+        'air_for_personal_use' => 'air_for_personal_use',
+        'isd_activision' => 'isd_activision'
+    ];
+    $table_name = $table_map[$request_type];
+
     // Prepare data based on request type
     $data = prepareRequestData($request_type);
     $data['EMP_ID'] = $emp_id;
     $data['STATUS'] = 'pending';
-    
-    // Generate request ID based on table
+
+    // Handle file upload for sim_issue
+    if ($request_type == 'sim_issue' && isset($_FILES['POI']) && $_FILES['POI']['error'] == 0) {
+        $upload_dir = 'uploads/poi/';
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
+        $file_name = time() . '_' . basename($_FILES['POI']['name']);
+        $file_path = $upload_dir . $file_name;
+        if (move_uploaded_file($_FILES['POI']['tmp_name'], $file_path)) {
+            $data['POI_FILE_PATH'] = $file_path;
+            $data['POI_ORIGINAL_NAME'] = $_FILES['POI']['name'];
+        }
+    }
+
+    // Generate request ID
     $request_id = generateRequestId($table_name);
-    
+
     // Build insert query
     $columns = [];
     $values = [];
-    
     foreach ($data as $column => $value) {
         $columns[] = $column;
         $values[] = "'" . mysqli_real_escape_string($conn, $value) . "'";
     }
-    
+
     // Add request by and timestamp
     $columns[] = 'REQ_BY';
     $values[] = $user_id;
     $columns[] = 'REQ_AT';
     $values[] = 'NOW()';
-    
+
     // For tables that use REQUEST_ID instead of REQ_ID
     if ($table_name == 'activision_of_new_sim' || $table_name == 'deactivision_of_sim') {
         $columns[] = 'REQUEST_ID';
@@ -584,12 +598,12 @@ function submitRequest() {
         $columns[] = 'REQ_ID';
         $values[] = "'$request_id'";
     }
-    
+
     $columns_str = implode(', ', $columns);
     $values_str = implode(', ', $values);
-    
+
     $query = "INSERT INTO $table_name ($columns_str) VALUES ($values_str)";
-    
+
     if (mysqli_query($conn, $query)) {
         return ['success' => true, 'request_id' => $request_id];
     } else {

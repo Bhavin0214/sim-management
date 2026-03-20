@@ -29,101 +29,77 @@ function getAdminStats() {
     
     $stats = [];
     
-    // Total requests count
-    $query = "SELECT 
-                (SELECT COUNT(*) FROM sim_issue) +
-                (SELECT COUNT(*) FROM activision_of_new_sim) +
-                (SELECT COUNT(*) FROM deactivision_of_sim) +
-                (SELECT COUNT(*) FROM porting_cocp) +
-                (SELECT COUNT(*) FROM activision_e_sim) +
-                (SELECT COUNT(*) FROM sim_replacement) +
-                (SELECT COUNT(*) FROM temporary_suspension) +
-                (SELECT COUNT(*) FROM air_offical_usage) +
-                (SELECT COUNT(*) FROM air_for_personal_use) +
-                (SELECT COUNT(*) FROM isd_activision) as total_requests";
+    // Define all request tables with their date column names
+    $tables = [
+        'sim_issue' => 'req_at',
+        'activision_of_new_sim' => 'req_at',
+        'deactivision_of_sim' => 'REQ_AT',
+        'porting_cocp' => 'REQ_AT',
+        'activision_e_sim' => 'REQ_AT',
+        'sim_replacement' => 'REQ_AT',
+        'temporary_suspension' => 'REQ_AT',
+        'air_offical_usage' => 'REQ_AT',
+        'air_for_personal_use' => 'REQ_AT',
+        'isd_activision' => 'REQ_AT'
+    ];
     
-    $result = mysqli_query($conn, $query);
-    if ($result) {
-        $row = mysqli_fetch_assoc($result);
-        $stats['total_requests'] = $row['total_requests'] ?? 0;
+    // Total requests
+    $total = 0;
+    foreach ($tables as $table => $date_col) {
+        $result = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM $table");
+        if ($result) {
+            $row = mysqli_fetch_assoc($result);
+            $total += $row['cnt'];
+        }
     }
+    $stats['total_requests'] = $total;
     
-    // Pending requests count
-    $query = "SELECT 
-                (SELECT COUNT(*) FROM sim_issue WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM activision_of_new_sim WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM deactivision_of_sim WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM porting_cocp WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM activision_e_sim WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM sim_replacement WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM temporary_suspension WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM air_offical_usage WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM air_for_personal_use WHERE STATUS = 'pending') +
-                (SELECT COUNT(*) FROM isd_activision WHERE STATUS = 'pending') as pending_requests";
-    
-    $result = mysqli_query($conn, $query);
-    if ($result) {
-        $row = mysqli_fetch_assoc($result);
-        $stats['pending_requests'] = $row['pending_requests'] ?? 0;
+    // Pending requests
+    $pending = 0;
+    foreach ($tables as $table => $date_col) {
+        $result = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM $table WHERE STATUS = 'pending'");
+        if ($result) {
+            $row = mysqli_fetch_assoc($result);
+            $pending += $row['cnt'];
+        }
     }
+    $stats['pending_requests'] = $pending;
     
-    // Get today's requests
+    // Today's requests
     $today = date('Y-m-d');
-    $query = "SELECT 
-                (SELECT COUNT(*) FROM sim_issue WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM activision_of_new_sim WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM deactivision_of_sim WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM porting_cocp WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM activision_e_sim WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM sim_replacement WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM temporary_suspension WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM air_offical_usage WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM air_for_personal_use WHERE DATE(req_at) = '$today') +
-                (SELECT COUNT(*) FROM isd_activision WHERE DATE(req_at) = '$today') as today_requests";
-    
-    $result = mysqli_query($conn, $query);
-    if ($result) {
-        $row = mysqli_fetch_assoc($result);
-        $stats['today_requests'] = $row['today_requests'] ?? 0;
+    $today_total = 0;
+    foreach ($tables as $table => $date_col) {
+        $result = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM $table WHERE DATE($date_col) = '$today'");
+        if ($result) {
+            $row = mysqli_fetch_assoc($result);
+            $today_total += $row['cnt'];
+        }
     }
+    $stats['today_requests'] = $today_total;
     
-    // Get total users
-    $query = "SELECT COUNT(*) as total_users FROM master_employee";
-    $result = mysqli_query($conn, $query);
+    // Users count
+    $result = mysqli_query($conn, "SELECT COUNT(*) as total_users FROM master_employee");
     if ($result) {
         $row = mysqli_fetch_assoc($result);
         $stats['total_users'] = $row['total_users'] ?? 0;
     }
     
-    // Get inventory stats from sim_inventory table
+    // Inventory stats
     $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'sim_inventory'");
     if (mysqli_num_rows($table_check) > 0) {
         $query = "SELECT 
                     COUNT(*) as total_sim,
-                    SUM(CASE WHEN Status = 'AVAILABLE' THEN 1 ELSE 0 END) as available_sim,
-                    SUM(CASE WHEN Status = 'ASSIGNED' THEN 1 ELSE 0 END) as assigned_sim,
-                    SUM(CASE WHEN Status = 'ACTIVE' THEN 1 ELSE 0 END) as active_sim,
-                    SUM(CASE WHEN Status = 'SUSPENDED' THEN 1 ELSE 0 END) as suspended_sim,
-                    SUM(CASE WHEN Status = 'DEACTIVATED' THEN 1 ELSE 0 END) as deactivated_sim
+                    SUM(CASE WHEN Status = 'AVAILABLE' THEN 1 ELSE 0 END) as available_sim
                   FROM sim_inventory";
         $result = mysqli_query($conn, $query);
         if ($result) {
             $row = mysqli_fetch_assoc($result);
             $stats['total_sim'] = $row['total_sim'] ?? 0;
             $stats['available_sim'] = $row['available_sim'] ?? 0;
-            $stats['assigned_sim'] = $row['assigned_sim'] ?? 0;
-            $stats['active_sim'] = $row['active_sim'] ?? 0;
-            $stats['suspended_sim'] = $row['suspended_sim'] ?? 0;
-            $stats['deactivated_sim'] = $row['deactivated_sim'] ?? 0;
         }
     } else {
-        // If sim_inventory table doesn't exist, set default values
         $stats['total_sim'] = 0;
         $stats['available_sim'] = 0;
-        $stats['assigned_sim'] = 0;
-        $stats['active_sim'] = 0;
-        $stats['suspended_sim'] = 0;
-        $stats['deactivated_sim'] = 0;
     }
     
     return $stats;
